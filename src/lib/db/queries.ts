@@ -2,39 +2,76 @@ import { getDb } from './schema';
 import { getCached, setCache } from './redis';
 import { Politician, BillVote } from '../types';
 
-export async function getPoliticiansByLocation(state: string, district: string | null): Promise<Politician[]> {
-  const cacheKey = `reps:${state}:${district || 'all'}`;
+interface LocationInfo {
+  state: string;
+  congressionalDistrict: string | null;
+  stateSenateDistrict: string | null;
+  stateAssemblyDistrict: string | null;
+  cityCouncilDistrict: string | null;
+  borough: string | null;
+  city: string | null;
+}
+
+export async function getPoliticiansByLocation(loc: LocationInfo): Promise<Politician[]> {
+  const cacheKey = `reps:${loc.state}:${loc.congressionalDistrict}:${loc.stateSenateDistrict}:${loc.stateAssemblyDistrict}:${loc.cityCouncilDistrict}:${loc.borough}`;
   const cached = await getCached<Politician[]>(cacheKey);
   if (cached) return cached;
 
   const db = getDb();
+  const rows: PoliticianRow[] = [];
 
-  // Get president + VP
-  const executives = db.prepare(
-    `SELECT * FROM politicians WHERE state = 'US' AND level = 'federal'`
-  ).all() as PoliticianRow[];
+  // Federal: President + VP
+  rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = 'US'`).all() as PoliticianRow[]);
 
-  // Get senators for this state
-  const senators = db.prepare(
-    `SELECT * FROM politicians WHERE state = ? AND district IS NULL AND level = 'federal' AND office LIKE '%Senator%'`
-  ).all(state) as PoliticianRow[];
+  // Federal: Senators
+  rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = ? AND office LIKE '%Senator%' AND level = 'federal'`).all(loc.state) as PoliticianRow[]);
 
-  // Get house rep for this district
-  let reps: PoliticianRow[] = [];
-  if (district) {
-    reps = db.prepare(
-      `SELECT * FROM politicians WHERE state = ? AND district = ? AND level = 'federal' AND office LIKE '%Representative%'`
-    ).all(state, district) as PoliticianRow[];
+  // Federal: House Rep
+  if (loc.congressionalDistrict) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = ? AND district = ? AND office LIKE '%Representative%' AND level = 'federal'`).all(loc.state, loc.congressionalDistrict) as PoliticianRow[]);
   }
 
-  // Get governor
-  const governor = db.prepare(
-    `SELECT * FROM politicians WHERE state = ? AND level = 'state'`
-  ).all(state) as PoliticianRow[];
+  // State: Governor
+  rows.push(...db.prepare(`SELECT * FROM politicians WHERE bioguide_id = ?`).all(`GOV-${loc.state}`) as PoliticianRow[]);
 
-  const allRows = [...executives, ...senators, ...reps, ...governor];
+  // State: Statewide officers for THIS state only
+  rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = ? AND level = 'state' AND (bioguide_id = ? OR bioguide_id = ? OR bioguide_id = ?)`).all(loc.state, `${loc.state}-LTGOV`, `${loc.state}-AG`, `${loc.state}-COMP`) as PoliticianRow[]);
 
-  const politicians: Politician[] = allRows.map(row => {
+  // State: State Senator
+  if (loc.stateSenateDistrict) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = ? AND state_senate_district = ? AND level = 'state'`).all(loc.state, loc.stateSenateDistrict) as PoliticianRow[]);
+  }
+
+  // State: State Assembly
+  if (loc.stateAssemblyDistrict) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = ? AND state_assembly_district = ? AND level = 'state'`).all(loc.state, loc.stateAssemblyDistrict) as PoliticianRow[]);
+  }
+
+  // Local: Citywide officials
+  if (loc.city) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND (city = ? OR city = 'New York City') AND council_district IS NULL AND office NOT LIKE '%Borough%' AND office NOT LIKE '%District Attorney%'`).all(loc.city) as PoliticianRow[]);
+  }
+
+  // Local: Borough President
+  if (loc.borough) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = ? AND office LIKE '%Borough President%'`).all(loc.borough) as PoliticianRow[]);
+  }
+
+  // Local: District Attorney
+  if (loc.borough) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = ? AND office LIKE '%District Attorney%'`).all(loc.borough) as PoliticianRow[]);
+  }
+
+  // Local: City Council
+  if (loc.cityCouncilDistrict) {
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND council_district = ? AND state = ?`).all(loc.cityCouncilDistrict, loc.state) as PoliticianRow[]);
+  }
+
+  // Deduplicate
+  const seen = new Set<number>();
+  const uniqueRows = rows.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+
+  const politicians: Politician[] = uniqueRows.map(row => {
     const bills = db.prepare('SELECT * FROM bills WHERE politician_id = ? LIMIT 5').all(row.id) as BillRow[];
     const pacs = db.prepare('SELECT * FROM pacs WHERE politician_id = ? ORDER BY amount DESC LIMIT 5').all(row.id) as PacRow[];
     const positions = db.prepare('SELECT * FROM positions WHERE politician_id = ? LIMIT 5').all(row.id) as PositionRow[];
@@ -47,63 +84,17 @@ export async function getPoliticiansByLocation(state: string, district: string |
       photoUrl: row.photo_url,
       birthplace: row.birthplace ? `${row.birthplace}${row.birthday ? ` (born ${row.birthday})` : ''}` : null,
       bioguideId: row.bioguide_id,
-      bills: bills.map(b => ({
-        billId: b.bill_id,
-        title: b.title,
-        vote: (b.vote || 'Sponsored') as BillVote['vote'],
-        date: b.date || '',
-        description: b.description || '',
-      })),
-      pacs: pacs.map(p => ({
-        pacName: p.pac_name,
-        amount: p.amount || 0,
-        cycle: p.cycle || '',
-      })),
-      positions: positions.map(p => ({
-        topic: p.topic,
-        stance: p.stance,
-        citation: p.citation || '',
-        sourceUrl: p.source_url || '',
-      })),
+      bills: bills.map(b => ({ billId: b.bill_id, title: b.title, vote: (b.vote || 'Sponsored') as BillVote['vote'], date: b.date || '', description: b.description || '' })),
+      pacs: pacs.map(p => ({ pacName: p.pac_name, amount: p.amount || 0, cycle: p.cycle || '' })),
+      positions: positions.map(p => ({ topic: p.topic, stance: p.stance, citation: p.citation || '', sourceUrl: p.source_url || '' })),
     };
   });
 
-  // Cache for 1 hour
   await setCache(cacheKey, politicians, 3600);
   return politicians;
 }
 
-interface PoliticianRow {
-  id: number;
-  bioguide_id: string;
-  name: string;
-  office: string;
-  level: string;
-  party: string;
-  state: string;
-  district: string | null;
-  photo_url: string | null;
-  birthplace: string | null;
-  birthday: string | null;
-}
-
-interface BillRow {
-  bill_id: string;
-  title: string;
-  vote: string;
-  date: string;
-  description: string;
-}
-
-interface PacRow {
-  pac_name: string;
-  amount: number;
-  cycle: string;
-}
-
-interface PositionRow {
-  topic: string;
-  stance: string;
-  citation: string;
-  source_url: string;
-}
+interface PoliticianRow { id: number; bioguide_id: string; name: string; office: string; level: string; party: string; state: string; district: string | null; photo_url: string | null; birthplace: string | null; birthday: string | null; }
+interface BillRow { bill_id: string; title: string; vote: string; date: string; description: string; }
+interface PacRow { pac_name: string; amount: number; cycle: string; }
+interface PositionRow { topic: string; stance: string; citation: string; source_url: string; }
