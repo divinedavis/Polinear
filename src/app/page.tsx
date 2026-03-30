@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Politician } from '@/lib/types';
 import PoliticianCard from '@/components/PoliticianCard';
+import CollapsibleSection from '@/components/CollapsibleSection';
 
 export default function Home() {
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -12,11 +13,7 @@ export default function Home() {
   const [manualAddress, setManualAddress] = useState('');
   const [showManual, setShowManual] = useState(false);
 
-  useEffect(() => {
-    detectLocation();
-  }, []);
-
-  async function detectLocation() {
+  const detectLocation = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -56,7 +53,11 @@ export default function Home() {
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-  }
+  }, []);
+
+  useEffect(() => {
+    detectLocation();
+  }, [detectLocation]);
 
   async function fetchRepresentatives(addr: string) {
     try {
@@ -107,9 +108,7 @@ export default function Home() {
           Poli<span className="text-blue-500">near</span>
         </h1>
         <p className="text-gray-400 mb-8 text-center">See who impacts your life politically</p>
-
         <p className="text-yellow-400 text-sm mb-4">{error}</p>
-
         <form onSubmit={handleManualSubmit} className="w-full max-w-lg flex flex-col gap-3">
           <input
             type="text"
@@ -127,7 +126,6 @@ export default function Home() {
             Find My Representatives
           </button>
         </form>
-
         <button
           onClick={detectLocation}
           className="mt-4 text-sm text-gray-500 hover:text-gray-300 flex items-center gap-1"
@@ -138,13 +136,11 @@ export default function Home() {
           </svg>
           Try location again
         </button>
-
         <p className="mt-12 text-xs text-gray-600">No login required. Your location is not stored.</p>
       </div>
     );
   }
 
-  // Group politicians by level
   const federal = politicians.filter(p => p.level === 'federal');
   const state = politicians.filter(p => p.level === 'state');
   const local = politicians.filter(p => p.level === 'local');
@@ -167,44 +163,50 @@ export default function Home() {
       </div>
 
       {federal.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-            Federal Officials
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-            {federal.map((p, i) => (
-              <PoliticianCard key={i} politician={p} />
-            ))}
-          </div>
+        <section className="mb-4">
+          <CollapsibleSection
+            title={`Federal Officials (${federal.length})`}
+            defaultOpen={true}
+            level="federal"
+          >
+            <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 pt-2">
+              {federal.map((p, i) => (
+                <PoliticianCard key={i} politician={p} />
+              ))}
+            </div>
+          </CollapsibleSection>
         </section>
       )}
 
       {state.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-            State Officials
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-            {state.map((p, i) => (
-              <PoliticianCard key={i} politician={p} />
-            ))}
-          </div>
+        <section className="mb-4">
+          <CollapsibleSection
+            title={`State Officials (${state.length})`}
+            defaultOpen={false}
+            level="state"
+          >
+            <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 pt-2">
+              {state.map((p, i) => (
+                <PoliticianCard key={i} politician={p} />
+              ))}
+            </div>
+          </CollapsibleSection>
         </section>
       )}
 
       {local.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-300 mb-4 flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-            Local Officials
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-            {local.map((p, i) => (
-              <PoliticianCard key={i} politician={p} />
-            ))}
-          </div>
+        <section className="mb-4">
+          <CollapsibleSection
+            title={`Local Officials (${local.length})`}
+            defaultOpen={false}
+            level="local"
+          >
+            <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 pt-2">
+              {local.map((p, i) => (
+                <PoliticianCard key={i} politician={p} />
+              ))}
+            </div>
+          </CollapsibleSection>
         </section>
       )}
 
