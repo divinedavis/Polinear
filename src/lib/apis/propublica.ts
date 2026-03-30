@@ -1,52 +1,40 @@
 import { getCached, setCache } from '../cache';
 import { BillVote } from '../types';
 
-const API_KEY = process.env.PROPUBLICA_API_KEY || '';
-
-interface VoteResult {
-  bill?: {
-    bill_id: string;
-    title: string;
-    short_title: string;
-    latest_major_action: string;
-  };
-  position: string;
-  date: string;
-  description: string;
-}
-
 export async function getMemberVotes(bioguideId: string): Promise<BillVote[]> {
   const cacheKey = `votes:${bioguideId}`;
   const cached = getCached<BillVote[]>(cacheKey);
   if (cached) return cached;
 
   try {
+    const apiKey = process.env.CONGRESS_GOV_API_KEY || '';
+
     const res = await fetch(
-      `https://api.propublica.org/congress/v1/members/${bioguideId}/votes.json`,
-      { headers: { 'X-API-Key': API_KEY } }
+      `https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation?limit=10&api_key=${apiKey}`,
+      { headers: { 'Accept': 'application/json' } }
     );
 
     if (!res.ok) return [];
 
     const data = await res.json();
-    const votes: VoteResult[] = data?.results?.[0]?.votes || [];
-
+    const legislation = data?.sponsoredLegislation || [];
     const currentYear = new Date().getFullYear().toString();
-    const ytdVotes = votes
-      .filter((v: VoteResult) => v.date?.startsWith(currentYear) && v.bill?.title)
+
+    const bills: BillVote[] = legislation
+      .filter((bill: { introducedDate?: string }) => bill.introducedDate?.startsWith(currentYear))
       .slice(0, 5)
-      .map((v: VoteResult) => ({
-        billId: v.bill!.bill_id,
-        title: v.bill!.short_title || v.bill!.title,
-        vote: v.position as BillVote['vote'],
-        date: v.date,
-        description: v.bill!.latest_major_action || v.description,
+      .map((bill: { number?: string; title?: string; introducedDate?: string; latestAction?: { text?: string } }) => ({
+        billId: bill.number || '',
+        title: bill.title || 'Untitled Bill',
+        vote: 'Sponsored' as BillVote['vote'],
+        date: bill.introducedDate || '',
+        description: bill.latestAction?.text || '',
       }));
 
-    setCache(cacheKey, ytdVotes, 86400); // 24 hours
-    return ytdVotes;
+    setCache(cacheKey, bills, 86400);
+    return bills;
   } catch (err) {
-    console.error('ProPublica error:', err);
+    console.error('Congress.gov API error:', err);
     return [];
   }
 }
