@@ -1,7 +1,16 @@
 import { getCached, setCache } from '../cache';
 import { Position } from '../types';
+import * as cheerio from 'cheerio';
 
 const TOPICS = ['Israel', 'Taxes', 'Abortion', 'Religion', 'Affordable Housing'];
+
+const TOPIC_KEYWORDS: Record<string, string[]> = {
+  'Israel': ['israel', 'gaza', 'palestinian', 'hamas', 'middle east'],
+  'Taxes': ['tax', 'taxation', 'irs', 'income tax', 'tax cut'],
+  'Abortion': ['abort', 'pro-life', 'pro-choice', 'reproductive', 'roe'],
+  'Religion': ['religio', 'faith', 'church', 'prayer', 'christian'],
+  'Affordable Housing': ['housing', 'rent', 'homeless', 'affordable hous', 'hud'],
+};
 
 export async function getPositions(politicianName: string): Promise<Position[]> {
   const cacheKey = `positions:${politicianName}`;
@@ -9,62 +18,53 @@ export async function getPositions(politicianName: string): Promise<Position[]> 
   if (cached) return cached;
 
   try {
-    // Use VoteSmart API if available
-    const apiKey = process.env.VOTESMART_API_KEY;
-    if (apiKey) {
-      const searchRes = await fetch(
-        `https://api.votesmart.org/Officials.getByLastname?key=${apiKey}&lastName=${encodeURIComponent(politicianName.split(' ').pop() || '')}&o=JSON`
-      );
+    const nameParts = politicianName.replace(/[^a-zA-Z ]/g, '').trim().split(/\s+/);
+    if (nameParts.length < 2) return [];
 
-      if (searchRes.ok) {
-        const searchData = await searchRes.json();
-        const candidate = searchData?.candidateList?.candidate;
-        const candidateId = Array.isArray(candidate) ? candidate[0]?.candidateId : candidate?.candidateId;
+    const firstName = nameParts[0];
+    const lastName = nameParts[nameParts.length - 1];
+    const urlName = `${firstName}_${lastName}`;
 
-        if (candidateId) {
-          const bioRes = await fetch(
-            `https://api.votesmart.org/CandidateBio.getBio?key=${apiKey}&candidateId=${candidateId}&o=JSON`
-          );
+    const res = await fetch(`https://www.ontheissues.org/${urlName}.htm`, {
+      headers: { 'User-Agent': 'Polinear/1.0 (Political Education App)' },
+    });
 
-          if (bioRes.ok) {
-            const bioData = await bioRes.json();
-            const bio = bioData?.bio?.candidate;
+    if (!res.ok) return [];
 
-            if (bio) {
-              const positions: Position[] = TOPICS.map(topic => ({
-                topic,
-                stance: getStanceFromBio(bio, topic),
-                citation: 'VoteSmart',
-                sourceUrl: `https://justfacts.votesmart.org/candidate/biography/${candidateId}`,
-              })).filter(p => p.stance !== 'No data available');
+    const html = await res.text();
+    const page = cheerio.load(html);
 
-              if (positions.length > 0) {
-                setCache(cacheKey, positions, 86400 * 7);
-                return positions;
-              }
-            }
+    const positions: Position[] = [];
+    const bodyText = page('body').text();
+
+    for (const topic of TOPICS) {
+      const keywords = TOPIC_KEYWORDS[topic];
+      const allText = bodyText.replace(/\s+/g, ' ');
+      const textSentences = allText.split(/[.!?]+/);
+
+      for (const sentence of textSentences) {
+        const lower = sentence.toLowerCase();
+        if (keywords.some(kw => lower.includes(kw))) {
+          const trimmed = sentence.trim();
+          if (trimmed.length > 20 && trimmed.length < 300) {
+            positions.push({
+              topic,
+              stance: trimmed + '.',
+              citation: 'OnTheIssues.org',
+              sourceUrl: `https://www.ontheissues.org/${urlName}.htm`,
+            });
+            break;
           }
         }
       }
     }
 
-    // Fallback: construct positions from publicly known stances based on party
-    return [];
+    setCache(cacheKey, positions, 86400 * 7);
+    return positions;
   } catch (err) {
-    console.error('Positions API error:', err);
+    console.error('OnTheIssues scraper error:', err);
     return [];
   }
-}
-
-function getStanceFromBio(bio: Record<string, string>, topic: string): string {
-  const specialInterests = bio.specialInterests || '';
-  const topicLower = topic.toLowerCase();
-
-  if (specialInterests.toLowerCase().includes(topicLower)) {
-    return specialInterests;
-  }
-
-  return 'No data available';
 }
 
 export { TOPICS };
