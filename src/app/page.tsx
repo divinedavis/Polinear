@@ -13,6 +13,32 @@ export default function Home() {
   const [manualAddress, setManualAddress] = useState('');
   const [showManual, setShowManual] = useState(false);
 
+  const fetchRepresentatives = useCallback(async (addr: string) => {
+    try {
+      const res = await fetch(`/api/representatives?address=${encodeURIComponent(addr)}`);
+      if (!res.ok) {
+        const err = await res.json();
+        setError(err.error || 'Failed to find representatives');
+        setShowManual(true);
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      setAddress(data.address);
+      setPoliticians(data.politicians);
+
+      // Save to localStorage for instant reload
+      localStorage.setItem('polinear_address', data.address);
+      localStorage.setItem('polinear_data', JSON.stringify(data.politicians));
+      localStorage.setItem('polinear_ts', String(Date.now()));
+    } catch {
+      setError('Failed to load data. Please try again.');
+      setShowManual(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const detectLocation = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -53,39 +79,49 @@ export default function Home() {
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-  }, []);
+  }, [fetchRepresentatives]);
 
   useEffect(() => {
-    detectLocation();
-  }, [detectLocation]);
+    // Check localStorage first
+    const savedAddress = localStorage.getItem('polinear_address');
+    const savedData = localStorage.getItem('polinear_data');
+    const savedTs = localStorage.getItem('polinear_ts');
 
-  async function fetchRepresentatives(addr: string) {
-    try {
-      const res = await fetch(`/api/representatives?address=${encodeURIComponent(addr)}`);
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.error || 'Failed to find representatives');
-        setShowManual(true);
+    if (savedAddress && savedData && savedTs) {
+      const age = Date.now() - Number(savedTs);
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+
+      if (age < ONE_DAY) {
+        // Use cached data instantly
+        setAddress(savedAddress);
+        setPoliticians(JSON.parse(savedData));
         setLoading(false);
         return;
       }
-      const data = await res.json();
-      setAddress(data.address);
-      setPoliticians(data.politicians);
-    } catch {
-      setError('Failed to load data. Please try again.');
-      setShowManual(true);
-    } finally {
-      setLoading(false);
     }
-  }
+
+    // No cache or expired — detect location
+    detectLocation();
+  }, [detectLocation]);
 
   function handleManualSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!manualAddress.trim()) return;
     setShowManual(false);
-    fetchRepresentatives(manualAddress.trim());
     setLoading(true);
+    fetchRepresentatives(manualAddress.trim());
+  }
+
+  function handleChangeLocation() {
+    localStorage.removeItem('polinear_address');
+    localStorage.removeItem('polinear_data');
+    localStorage.removeItem('polinear_ts');
+    setShowManual(true);
+    setPoliticians([]);
+    setAddress('');
+    setManualAddress('');
+    setError('');
+    setLoading(false);
   }
 
   if (loading) {
@@ -101,20 +137,20 @@ export default function Home() {
     );
   }
 
-  if (error && showManual && politicians.length === 0) {
+  if ((error && showManual && politicians.length === 0) || (showManual && politicians.length === 0)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4">
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
           Poli<span className="text-blue-500">near</span>
         </h1>
         <p className="text-gray-400 mb-8 text-center">See who impacts your life politically</p>
-        <p className="text-yellow-400 text-sm mb-4">{error}</p>
+        {error && <p className="text-yellow-400 text-sm mb-4">{error}</p>}
         <form onSubmit={handleManualSubmit} className="w-full max-w-lg flex flex-col gap-3">
           <input
             type="text"
             value={manualAddress}
             onChange={(e) => setManualAddress(e.target.value)}
-            placeholder="Enter your address (e.g. 1600 Pennsylvania Ave, Washington DC)"
+            placeholder="Enter your address (e.g. 251 DeKalb Ave, Brooklyn NY)"
             className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             autoFocus
           />
@@ -134,9 +170,9 @@ export default function Home() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Try location again
+          Use my location
         </button>
-        <p className="mt-12 text-xs text-gray-600">No login required. Your location is not stored.</p>
+        <p className="mt-12 text-xs text-gray-600">No login required. Your location is not stored on our servers.</p>
       </div>
     );
   }
@@ -152,27 +188,29 @@ export default function Home() {
           Poli<span className="text-blue-500">near</span>
         </h1>
         {address && (
-          <p className="text-gray-400 mt-1 text-sm flex items-center gap-1">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            {address}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-gray-400 text-sm flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {address}
+            </p>
+            <button
+              onClick={handleChangeLocation}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              Change
+            </button>
+          </div>
         )}
       </div>
 
       {federal.length > 0 && (
         <section className="mb-4">
-          <CollapsibleSection
-            title={`Federal Officials (${federal.length})`}
-            defaultOpen={true}
-            level="federal"
-          >
+          <CollapsibleSection title={`Federal Officials (${federal.length})`} defaultOpen={true} level="federal">
             <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 pt-2">
-              {federal.map((p, i) => (
-                <PoliticianCard key={i} politician={p} />
-              ))}
+              {federal.map((p, i) => <PoliticianCard key={i} politician={p} />)}
             </div>
           </CollapsibleSection>
         </section>
@@ -180,15 +218,9 @@ export default function Home() {
 
       {state.length > 0 && (
         <section className="mb-4">
-          <CollapsibleSection
-            title={`State Officials (${state.length})`}
-            defaultOpen={false}
-            level="state"
-          >
+          <CollapsibleSection title={`State Officials (${state.length})`} defaultOpen={false} level="state">
             <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 pt-2">
-              {state.map((p, i) => (
-                <PoliticianCard key={i} politician={p} />
-              ))}
+              {state.map((p, i) => <PoliticianCard key={i} politician={p} />)}
             </div>
           </CollapsibleSection>
         </section>
@@ -196,15 +228,9 @@ export default function Home() {
 
       {local.length > 0 && (
         <section className="mb-4">
-          <CollapsibleSection
-            title={`Local Officials (${local.length})`}
-            defaultOpen={false}
-            level="local"
-          >
+          <CollapsibleSection title={`Local Officials (${local.length})`} defaultOpen={false} level="local">
             <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 pt-2">
-              {local.map((p, i) => (
-                <PoliticianCard key={i} politician={p} />
-              ))}
+              {local.map((p, i) => <PoliticianCard key={i} politician={p} />)}
             </div>
           </CollapsibleSection>
         </section>
