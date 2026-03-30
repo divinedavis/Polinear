@@ -53,5 +53,7 @@ export async function aggregatePoliticianData(
     positions,
     bills,
     pacs,
+    termEnd: null,
+    nextElection: null,
   };
 }

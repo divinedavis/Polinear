@@ -7,6 +7,27 @@ interface PoliticianCardProps {
   politician: Politician;
 }
 
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return 'Unknown';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getTimeUntil(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const now = new Date();
+  const target = new Date(dateStr + 'T00:00:00');
+  const diff = target.getTime() - now.getTime();
+  if (diff < 0) return 'Past';
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days < 30) return `${days} days`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} mo`;
+  const years = Math.floor(months / 12);
+  const remainMonths = months % 12;
+  return remainMonths > 0 ? `${years}y ${remainMonths}mo` : `${years}y`;
+}
+
 export default function PoliticianCard({ politician }: PoliticianCardProps) {
   const partyColor = politician.party === 'Democrat'
     ? 'bg-blue-600'
@@ -24,16 +45,13 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
     <div className={`bg-gray-800 rounded-xl border-l-4 ${partyBorder} overflow-hidden shadow-lg`}>
       {/* Header */}
       <div className="p-4 flex gap-4">
-        {/* Photo */}
         <div className="flex-shrink-0">
           {politician.photoUrl ? (
             <img
               src={politician.photoUrl}
               alt={politician.name}
               className="w-20 h-24 object-cover rounded-lg bg-gray-700"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/placeholder-headshot.svg';
-              }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           ) : (
             <div className="w-20 h-24 bg-gray-700 rounded-lg flex items-center justify-center">
@@ -44,7 +62,6 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
           )}
         </div>
 
-        {/* Basic Info */}
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-bold text-white truncate">{politician.name}</h3>
           <p className="text-sm text-gray-400 mt-0.5">{politician.office}</p>
@@ -54,16 +71,37 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
             </span>
           </div>
           {politician.birthplace && (
-            <p className="text-xs text-gray-500 mt-2">
-              Born: {politician.birthplace}
-            </p>
+            <p className="text-xs text-gray-500 mt-2">Born: {politician.birthplace}</p>
           )}
         </div>
       </div>
 
+      {/* Term Info */}
+      {(politician.termEnd || politician.nextElection) && (
+        <div className="px-4 pb-2">
+          <div className="bg-gray-750 rounded-lg p-3 border border-gray-700" style={{ backgroundColor: 'rgba(55, 65, 81, 0.5)' }}>
+            <div className="flex justify-between items-center text-xs">
+              {politician.termEnd && (
+                <div>
+                  <span className="text-gray-500">Term ends:</span>{' '}
+                  <span className="text-gray-300 font-medium">{formatDate(politician.termEnd)}</span>
+                  <span className="text-gray-500 ml-1">({getTimeUntil(politician.termEnd)})</span>
+                </div>
+              )}
+            </div>
+            {politician.nextElection && (
+              <div className="text-xs mt-1">
+                <span className="text-gray-500">Next election:</span>{' '}
+                <span className="text-yellow-400 font-medium">{formatDate(politician.nextElection)}</span>
+                <span className="text-gray-500 ml-1">({getTimeUntil(politician.nextElection)})</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Collapsible Sections */}
       <div className="px-4 pb-2">
-        {/* Views / Positions */}
         <CollapsibleSection title="Views on Key Issues" badge={politician.positions.length > 0 ? `${politician.positions.length}` : undefined}>
           {politician.positions.length > 0 ? (
             <div className="space-y-3">
@@ -72,14 +110,7 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
                   <span className="font-medium text-white">{pos.topic}:</span>{' '}
                   <span className="text-gray-400">{pos.stance}</span>
                   {pos.sourceUrl && (
-                    <a
-                      href={pos.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 text-xs ml-1"
-                    >
-                      [Source]
-                    </a>
+                    <a href={pos.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs ml-1">[Source]</a>
                   )}
                 </div>
               ))}
@@ -89,16 +120,13 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
           )}
         </CollapsibleSection>
 
-        {/* Bills */}
         <CollapsibleSection title="Recent Bills Voted On" badge={politician.bills.length > 0 ? `${politician.bills.length}` : undefined}>
           {politician.bills.length > 0 ? (
             <div className="space-y-2">
               {politician.bills.map((bill, i) => (
                 <div key={i} className="text-sm border border-gray-700 rounded-lg p-2">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                      bill.vote === 'Yes' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
-                    }`}>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${bill.vote === 'Yes' ? 'bg-green-900 text-green-300' : bill.vote === 'No' ? 'bg-red-900 text-red-300' : 'bg-blue-900 text-blue-300'}`}>
                       {bill.vote}
                     </span>
                     <span className="text-gray-400 text-xs">{bill.date}</span>
@@ -113,7 +141,6 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
           )}
         </CollapsibleSection>
 
-        {/* PACs */}
         <CollapsibleSection title="Top PAC Contributions" badge={politician.pacs.length > 0 ? `${politician.pacs.length}` : undefined}>
           {politician.pacs.length > 0 ? (
             <div className="space-y-2">

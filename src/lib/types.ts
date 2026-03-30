@@ -9,6 +9,8 @@ export interface Politician {
   positions: Position[];
   bills: BillVote[];
   pacs: PACContribution[];
+  termEnd: string | null;
+  nextElection: string | null;
 }
 
 export interface Position {

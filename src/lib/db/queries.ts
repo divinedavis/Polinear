@@ -84,6 +84,8 @@ export async function getPoliticiansByLocation(loc: LocationInfo): Promise<Polit
       photoUrl: row.photo_url,
       birthplace: row.birthplace ? `${row.birthplace}${row.birthday ? ` (born ${row.birthday})` : ''}` : null,
       bioguideId: row.bioguide_id,
+      termEnd: row.term_end || null,
+      nextElection: row.next_election || null,
       bills: bills.map(b => ({ billId: b.bill_id, title: b.title, vote: (b.vote || 'Sponsored') as BillVote['vote'], date: b.date || '', description: b.description || '' })),
       pacs: pacs.map(p => ({ pacName: p.pac_name, amount: p.amount || 0, cycle: p.cycle || '' })),
       positions: positions.map(p => ({ topic: p.topic, stance: p.stance, citation: p.citation || '', sourceUrl: p.source_url || '' })),
@@ -94,7 +96,7 @@ export async function getPoliticiansByLocation(loc: LocationInfo): Promise<Polit
   return politicians;
 }
 
-interface PoliticianRow { id: number; bioguide_id: string; name: string; office: string; level: string; party: string; state: string; district: string | null; photo_url: string | null; birthplace: string | null; birthday: string | null; }
+interface PoliticianRow { id: number; bioguide_id: string; name: string; office: string; level: string; party: string; state: string; district: string | null; photo_url: string | null; birthplace: string | null; birthday: string | null; term_end: string | null; next_election: string | null; }
 interface BillRow { bill_id: string; title: string; vote: string; date: string; description: string; }
 interface PacRow { pac_name: string; amount: number; cycle: string; }
 interface PositionRow { topic: string; stance: string; citation: string; source_url: string; }
