@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Politician } from '@/lib/types';
 import PoliticianCard from '@/components/PoliticianCard';
 import CollapsibleSection from '@/components/CollapsibleSection';
+import AddressInput from '@/components/AddressInput';
 
 export default function Home() {
   const [politicians, setPoliticians] = useState<Politician[]>([]);
@@ -146,13 +147,10 @@ export default function Home() {
         <p className="text-gray-400 mb-8 text-center">See who impacts your life politically</p>
         {error && <p className="text-yellow-400 text-sm mb-4">{error}</p>}
         <form onSubmit={handleManualSubmit} className="w-full max-w-lg flex flex-col gap-3">
-          <input
-            type="text"
+          <AddressInput
             value={manualAddress}
-            onChange={(e) => setManualAddress(e.target.value)}
-            placeholder="Enter your address (e.g. 251 DeKalb Ave, Brooklyn NY)"
-            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            autoFocus
+            onChange={setManualAddress}
+            onSubmit={(addr) => { setManualAddress(addr); setShowManual(false); setLoading(true); fetchRepresentatives(addr); }}
           />
           <button
             type="submit"
