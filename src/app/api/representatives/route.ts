@@ -75,7 +75,8 @@ export async function GET(request: NextRequest) {
       stateAssemblyDistrict,
       cityCouncilDistrict: null, // TODO: NYC council district lookup
       borough: nycBorough,
-      city: isNyc ? 'New York City' : city,
+      isNYC: isNyc,
+      city: isNyc ? "New York City" : city,
     });
 
     const normalizedAddress = [addr.house_number, addr.road, borough || city, stateAbbr, addr.postcode].filter(Boolean).join(', ');

@@ -10,10 +10,11 @@ interface LocationInfo {
   cityCouncilDistrict: string | null;
   borough: string | null;
   city: string | null;
+  isNYC: boolean;
 }
 
 export async function getPoliticiansByLocation(loc: LocationInfo): Promise<Politician[]> {
-  const cacheKey = `reps:${loc.state}:${loc.congressionalDistrict}:${loc.stateSenateDistrict}:${loc.stateAssemblyDistrict}:${loc.cityCouncilDistrict}:${loc.borough}`;
+  const cacheKey = `reps:${loc.state}:${loc.congressionalDistrict}:${loc.stateSenateDistrict}:${loc.stateAssemblyDistrict}:${loc.cityCouncilDistrict}:${loc.borough}:${loc.isNYC}`;
   const cached = await getCached<Politician[]>(cacheKey);
   if (cached) return cached;
 
@@ -47,24 +48,25 @@ export async function getPoliticiansByLocation(loc: LocationInfo): Promise<Polit
     rows.push(...db.prepare(`SELECT * FROM politicians WHERE state = ? AND state_assembly_district = ? AND level = 'state'`).all(loc.state, loc.stateAssemblyDistrict) as PoliticianRow[]);
   }
 
-  // Local: Citywide officials
-  if (loc.city) {
-    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND (city = ? OR city = 'New York City') AND council_district IS NULL AND office NOT LIKE '%Borough%' AND office NOT LIKE '%District Attorney%'`).all(loc.city) as PoliticianRow[]);
-  }
+  // Local: Only show NYC officials if the user is actually in NYC
+  if (loc.isNYC) {
+    // Citywide: Mayor, Public Advocate, Comptroller
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = 'New York City' AND council_district IS NULL AND office NOT LIKE '%Borough%' AND office NOT LIKE '%District Attorney%'`).all() as PoliticianRow[]);
 
-  // Local: Borough President
-  if (loc.borough) {
-    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = ? AND office LIKE '%Borough President%'`).all(loc.borough) as PoliticianRow[]);
-  }
+    // Borough President
+    if (loc.borough) {
+      rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = ? AND office LIKE '%Borough President%'`).all(loc.borough) as PoliticianRow[]);
+    }
 
-  // Local: District Attorney
-  if (loc.borough) {
-    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = ? AND office LIKE '%District Attorney%'`).all(loc.borough) as PoliticianRow[]);
-  }
+    // District Attorney
+    if (loc.borough) {
+      rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND city = ? AND office LIKE '%District Attorney%'`).all(loc.borough) as PoliticianRow[]);
+    }
 
-  // Local: City Council
-  if (loc.cityCouncilDistrict) {
-    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND council_district = ? AND state = ?`).all(loc.cityCouncilDistrict, loc.state) as PoliticianRow[]);
+    // City Council
+    if (loc.cityCouncilDistrict) {
+      rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND council_district = ? AND state = ?`).all(loc.cityCouncilDistrict, loc.state) as PoliticianRow[]);
+    }
   }
 
   // Deduplicate
