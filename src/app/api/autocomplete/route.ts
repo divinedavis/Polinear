@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const API_KEY = process.env.GOOGLE_CIVIC_API_KEY || '';
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
@@ -10,8 +12,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=5&countrycodes=us`,
-      { headers: { 'User-Agent': 'Polinear/1.0' } }
+      `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=address&components=country:us&key=${API_KEY}`
     );
 
     if (!res.ok) {
@@ -19,8 +20,8 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await res.json();
-    const suggestions = data.map((item: { display_name: string }) => ({
-      display_name: item.display_name,
+    const suggestions = (data.predictions || []).map((p: { description: string }) => ({
+      display_name: p.description,
     }));
 
     return NextResponse.json({ suggestions });
