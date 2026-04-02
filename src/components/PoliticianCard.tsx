@@ -102,40 +102,36 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
 
       {/* Collapsible Sections */}
       <div className="px-4 pb-2">
-{(politician.netWorth2010 || politician.netWorth2025) && (
-          <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
+<div className="bg-gray-800/50 rounded-lg p-3 mb-3">
             <h4 className="text-sm font-semibold text-gray-400 mb-2">Net Worth</h4>
+            {politician.netWorth2010 || politician.netWorth2025 ? (
             <div className="flex items-center gap-4">
-              {politician.netWorth2010 && (
-                <div className="flex-1">
-                  <p className="text-xs text-gray-500">2010</p>
-                  <p className="text-sm font-mono text-gray-300">
-                    ${politician.netWorth2010 >= 1000000000 ? (politician.netWorth2010 / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B' : politician.netWorth2010 >= 1000000 ? (politician.netWorth2010 / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : (politician.netWorth2010 / 1000).toFixed(0) + 'K'}
-                  </p>
-                </div>
-              )}
-              {politician.netWorth2010 && politician.netWorth2025 && (
-                <div className="text-gray-500 text-lg">&#8594;</div>
-              )}
-              {politician.netWorth2025 && (
-                <div className="flex-1">
-                  <p className="text-xs text-gray-500">2025</p>
-                  <p className="text-sm font-mono text-gray-300">
-                    ${politician.netWorth2025 >= 1000000000 ? (politician.netWorth2025 / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B' : politician.netWorth2025 >= 1000000 ? (politician.netWorth2025 / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : (politician.netWorth2025 / 1000).toFixed(0) + 'K'}
-                  </p>
-                </div>
-              )}
-              {politician.netWorth2010 && politician.netWorth2025 && (
+              <div className="flex-1">
+                <p className="text-xs text-gray-500">2010</p>
+                <p className="text-sm font-mono text-gray-300">
+                  {politician.netWorth2010 ? `$${politician.netWorth2010 >= 1000000000 ? (politician.netWorth2010 / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B' : politician.netWorth2010 >= 1000000 ? (politician.netWorth2010 / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : (politician.netWorth2010 / 1000).toFixed(0) + 'K'}` : <span className="text-gray-600">N/A</span>}
+                </p>
+              </div>
+              <div className="text-gray-500 text-lg">&#8594;</div>
+              <div className="flex-1">
+                <p className="text-xs text-gray-500">2025</p>
+                <p className="text-sm font-mono text-gray-300">
+                  {politician.netWorth2025 ? `$${politician.netWorth2025 >= 1000000000 ? (politician.netWorth2025 / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B' : politician.netWorth2025 >= 1000000 ? (politician.netWorth2025 / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : (politician.netWorth2025 / 1000).toFixed(0) + 'K'}` : <span className="text-gray-600">N/A</span>}
+                </p>
+              </div>
+              {politician.netWorth2010 && politician.netWorth2025 ? (
                 <div className="flex-1 text-right">
                   <p className="text-xs text-gray-500">Change</p>
                   <p className={`text-sm font-mono font-medium ${politician.netWorth2025 > politician.netWorth2010 ? 'text-green-400' : 'text-red-400'}`}>
                     {politician.netWorth2025 > politician.netWorth2010 ? '+' : ''}{(((politician.netWorth2025 - politician.netWorth2010) / politician.netWorth2010) * 100).toFixed(0)}%
                   </p>
                 </div>
-              )}
+              ) : null}
             </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">Not publicly available</p>
+            )}
           </div>
-        )}
 
         <CollapsibleSection title="Views on Key Issues" badge={politician.positions.length > 0 ? `${politician.positions.length}` : undefined}>
           {politician.positions.length > 0 ? (
