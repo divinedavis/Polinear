@@ -55,5 +55,7 @@ export async function aggregatePoliticianData(
     pacs,
     termEnd: null,
     nextElection: null,
+    netWorth2010: null,
+    netWorth2025: null,
   };
 }

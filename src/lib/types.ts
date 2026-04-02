@@ -11,6 +11,8 @@ export interface Politician {
   pacs: PACContribution[];
   termEnd: string | null;
   nextElection: string | null;
+  netWorth2010: number | null;
+  netWorth2025: number | null;
 }
 
 export interface Position {
