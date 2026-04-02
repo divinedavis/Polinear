@@ -141,7 +141,7 @@ export default function PoliticianCard({ politician }: PoliticianCardProps) {
           )}
         </CollapsibleSection>
 
-        <CollapsibleSection title="Top PAC Contributions" badge={politician.pacs.length > 0 ? `${politician.pacs.length}` : undefined}>
+        <CollapsibleSection title={politician.pacs.length > 0 ? `Top PAC Contributions (Total: $${(() => { const t = politician.pacs.reduce((s, p) => s + p.amount, 0); return t >= 1000000 ? (t/1000000).toFixed(1).replace(/\.0$/, '') + 'M' : t >= 1000 ? (t/1000).toFixed(1).replace(/\.0$/, '') + 'K' : t.toLocaleString(); })()})` : "Top PAC Contributions"} badge={politician.pacs.length > 0 ? `${politician.pacs.length}` : undefined}>
           {politician.pacs.length > 0 ? (
             <div className="space-y-2">
               {politician.pacs.map((pac, i) => (
