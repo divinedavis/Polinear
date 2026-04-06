@@ -67,6 +67,9 @@ export async function getPoliticiansByLocation(loc: LocationInfo): Promise<Polit
     if (loc.cityCouncilDistrict) {
       rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND council_district = ? AND state = ?`).all(loc.cityCouncilDistrict, loc.state) as PoliticianRow[]);
     }
+  } else if (loc.city) {
+    // Non-NYC local officials: match by city name
+    rows.push(...db.prepare(`SELECT * FROM politicians WHERE level = 'local' AND state = ? AND (city = ? OR office LIKE '%' || ? || '%')`).all(loc.state, loc.city, loc.city) as PoliticianRow[]);
   }
 
   // Deduplicate
